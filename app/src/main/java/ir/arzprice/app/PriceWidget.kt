@@ -44,7 +44,7 @@ class PriceWidget : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(context, PriceWidget::class.java))
             if (ids.isEmpty()) return
 
-            val quotes = Prices.loadCached(context)
+            val quotes = Prices.widgetQuotes(context)
             val views = RemoteViews(context.packageName, R.layout.widget)
             for (i in NAME_IDS.indices) {
                 val q = quotes.getOrNull(i)

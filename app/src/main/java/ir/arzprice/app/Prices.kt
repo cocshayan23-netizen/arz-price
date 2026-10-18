@@ -8,7 +8,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-data class Quote(val title: String, val tomans: Long, val changePercent: Double)
+data class Quote(val key: String, val title: String, val tomans: Long, val changePercent: Double)
 
 object Prices {
 
@@ -60,7 +60,7 @@ object Prices {
             val rial = parseNumber(o.optString("p")) ?: continue
             val pct = Math.abs(o.optDouble("dp", 0.0))
             val sign = if (o.optString("dt") == "low") -1.0 else 1.0
-            result.add(Quote(title, Math.round(rial / 10.0), sign * pct))
+            result.add(Quote(key, title, Math.round(rial / 10.0), sign * pct))
         }
         if (result.isEmpty()) throw IllegalStateException("empty")
         save(context, result)
@@ -68,7 +68,9 @@ object Prices {
     }
 
     private fun save(context: Context, list: List<Quote>) {
-        val data = list.joinToString("\n") { "${it.title}\t${it.tomans}\t${it.changePercent}" }
+        val data = list.joinToString("\n") {
+            "${it.key}\t${it.title}\t${it.tomans}\t${it.changePercent}"
+        }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("data", data)
             .putLong("time", System.currentTimeMillis())
@@ -81,12 +83,41 @@ object Prices {
         val out = ArrayList<Quote>()
         for (line in data.split("\n")) {
             val p = line.split("\t")
-            if (p.size < 3) continue
-            val t = p[1].toLongOrNull() ?: continue
-            out.add(Quote(p[0], t, p[2].toDoubleOrNull() ?: 0.0))
+            if (p.size < 4) continue
+            val t = p[2].toLongOrNull() ?: continue
+            out.add(Quote(p[0], p[1], t, p[3].toDoubleOrNull() ?: 0.0))
         }
         return out
     }
+
+    // ---------- انتخاب‌شده‌ها ----------
+
+    fun getFavorites(context: Context): List<String> {
+        val s = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("favs", "") ?: ""
+        return s.split(",").filter { it.isNotBlank() }
+    }
+
+    fun toggleFavorite(context: Context, key: String) {
+        val list = getFavorites(context).toMutableList()
+        if (!list.remove(key)) list.add(key)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("favs", list.joinToString(","))
+            .apply()
+    }
+
+    fun favoriteQuotes(context: Context): List<Quote> {
+        val all = loadCached(context)
+        return getFavorites(context).mapNotNull { k -> all.find { it.key == k } }
+    }
+
+    /** ویجت: انتخاب‌شده‌ها؛ اگر چیزی انتخاب نشده باشد، همان ارزهای اول لیست. */
+    fun widgetQuotes(context: Context): List<Quote> {
+        val f = favoriteQuotes(context)
+        return if (f.isNotEmpty()) f else loadCached(context)
+    }
+
+    // ---------- نمایش ----------
 
     fun lastUpdateText(context: Context): String {
         val t = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong("time", 0L)
