@@ -11,8 +11,8 @@ android {
         applicationId = "ir.arzprice.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "2.0"
     }
 
     // امضای ثابت: از این به بعد هر نسخه‌ی جدید مستقیم روی نسخه‌ی قبلی نصب می‌شود
@@ -41,4 +41,5 @@ android {
 
 dependencies {
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("androidx.work:work-runtime:2.9.1")
 }

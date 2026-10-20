@@ -6,64 +6,107 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.view.View
 import android.widget.RemoteViews
 
-class PriceWidget : AppWidgetProvider() {
-
+/** پایه‌ی چهار مدل ویجت */
+open class BaseWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        refresh(context)
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH) refresh(context)
-    }
-
-    private fun refresh(context: Context) {
         val app = context.applicationContext
+        WidgetUpdater.updateAll(app)
         val pending = goAsync()
         Thread {
             try {
-                Prices.refresh(app)
+                Data.refresh(app)
             } catch (e: Exception) {
                 // اینترنت قطع است؛ آخرین قیمت ذخیره‌شده نمایش داده می‌شود
             }
-            updateAll(app)
+            WidgetUpdater.updateAll(app)
             pending.finish()
         }.start()
     }
+}
 
-    companion object {
-        const val ACTION_REFRESH = "ir.arzprice.app.REFRESH"
+class ListSmallWidget : BaseWidget()
+class ListWideWidget : BaseWidget()
+class SingleSmallWidget : BaseWidget()
+class SingleWideWidget : BaseWidget()
 
-        private val NAME_IDS = intArrayOf(R.id.n1, R.id.n2, R.id.n3, R.id.n4, R.id.n5)
-        private val PRICE_IDS = intArrayOf(R.id.p1, R.id.p2, R.id.p3, R.id.p4, R.id.p5)
+object WidgetUpdater {
+    private val ROW = intArrayOf(R.id.row1, R.id.row2, R.id.row3)
+    private val ICON = intArrayOf(R.id.icon1, R.id.icon2, R.id.icon3)
+    private val CODE = intArrayOf(R.id.code1, R.id.code2, R.id.code3)
+    private val CHG = intArrayOf(R.id.chg1, R.id.chg2, R.id.chg3)
+    private val PRICE = intArrayOf(R.id.price1, R.id.price2, R.id.price3)
+    private val DIV = intArrayOf(R.id.div1, R.id.div2)
 
-        fun updateAll(context: Context) {
-            val mgr = AppWidgetManager.getInstance(context)
-            val ids = mgr.getAppWidgetIds(ComponentName(context, PriceWidget::class.java))
-            if (ids.isEmpty()) return
+    private val UP = Color.parseColor("#4CD38A")
+    private val DOWN = Color.parseColor("#FF6B6B")
+    private val GRAY = Color.parseColor("#9AA7B5")
 
-            val quotes = Prices.widgetQuotes(context)
-            val views = RemoteViews(context.packageName, R.layout.widget)
-            for (i in NAME_IDS.indices) {
-                val q = quotes.getOrNull(i)
-                views.setTextViewText(NAME_IDS[i], q?.title ?: "")
-                views.setTextViewText(PRICE_IDS[i], if (q != null) Prices.formatToman(q.tomans) else "")
-            }
-            views.setTextViewText(
-                R.id.time,
-                Prices.lastUpdateText(context) + " • برای بروزرسانی لمس کنید"
-            )
-
-            val intent = Intent(context, PriceWidget::class.java).setAction(ACTION_REFRESH)
-            val pi = PendingIntent.getBroadcast(
-                context, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.root, pi)
-
-            mgr.updateAppWidget(ids, views)
+    fun updateAll(ctx: Context) {
+        val mgr = AppWidgetManager.getInstance(ctx)
+        val lists = listOf(ListSmallWidget::class.java, ListWideWidget::class.java)
+        val singles = listOf(SingleSmallWidget::class.java, SingleWideWidget::class.java)
+        val quotes = Data.favoriteQuotes(ctx)
+        for (cls in lists) {
+            val ids = mgr.getAppWidgetIds(ComponentName(ctx, cls))
+            if (ids.isNotEmpty()) mgr.updateAppWidget(ids, buildList(ctx, quotes))
         }
+        for (cls in singles) {
+            val ids = mgr.getAppWidgetIds(ComponentName(ctx, cls))
+            if (ids.isNotEmpty()) mgr.updateAppWidget(ids, buildSingle(ctx, quotes))
+        }
+    }
+
+    private fun openApp(ctx: Context): PendingIntent =
+        PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+
+    private fun chgColor(q: Quote): Int = when {
+        q.change > 0 -> UP
+        q.change < 0 -> DOWN
+        else -> GRAY
+    }
+
+    private fun iconColor(q: Quote): Int = if (q.ins.bg == 0) Color.WHITE else q.ins.bg
+
+    private fun buildList(ctx: Context, quotes: List<Quote>): RemoteViews {
+        val v = RemoteViews(ctx.packageName, R.layout.widget)
+        for (i in 0 until 3) {
+            val q = quotes.getOrNull(i)
+            if (q == null) {
+                v.setViewVisibility(ROW[i], View.GONE)
+                continue
+            }
+            v.setViewVisibility(ROW[i], View.VISIBLE)
+            v.setTextViewText(ICON[i], q.ins.icon)
+            v.setTextColor(ICON[i], iconColor(q))
+            v.setTextViewText(CODE[i], q.ins.code)
+            v.setTextViewText(CHG[i], Fmt.changeText(ctx, q))
+            v.setTextColor(CHG[i], chgColor(q))
+            v.setTextViewText(PRICE[i], Fmt.price(ctx, q.price, q.usd))
+        }
+        for (i in 0 until 2) {
+            v.setViewVisibility(DIV[i], if (quotes.size > i + 1) View.VISIBLE else View.GONE)
+        }
+        v.setOnClickPendingIntent(R.id.root, openApp(ctx))
+        return v
+    }
+
+    private fun buildSingle(ctx: Context, quotes: List<Quote>): RemoteViews {
+        val v = RemoteViews(ctx.packageName, R.layout.widget_single)
+        val q = quotes.getOrNull(0)
+        if (q != null) {
+            v.setTextViewText(R.id.s_icon, q.ins.icon)
+            v.setTextColor(R.id.s_icon, iconColor(q))
+            v.setTextViewText(R.id.s_name, I18n.name(ctx, q.ins))
+            v.setTextViewText(R.id.s_code, q.ins.code)
+            v.setTextViewText(R.id.s_chg, Fmt.changeText(ctx, q))
+            v.setTextColor(R.id.s_chg, chgColor(q))
+            v.setTextViewText(R.id.s_price, Fmt.price(ctx, q.price, q.usd))
+        }
+        v.setOnClickPendingIntent(R.id.root, openApp(ctx))
+        return v
     }
 }

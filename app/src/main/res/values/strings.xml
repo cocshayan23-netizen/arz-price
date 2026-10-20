@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">قیمت ارز</string>
+    <string name="app_name">NABZ | نبض بازار</string>
+    <string name="w_list_small">NABZ · لیست ۳ تایی / List</string>
+    <string name="w_list_wide">NABZ · لیست بزرگ / Wide list</string>
+    <string name="w_single_small">NABZ · تکی / Single</string>
+    <string name="w_single_wide">NABZ · تکی بزرگ / Wide single</string>
 </resources>
